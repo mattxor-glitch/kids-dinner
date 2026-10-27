@@ -56,6 +56,7 @@ class ParentActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        renderHistory() // a widget may have sent something while we were away
         refreshAcks()
     }
 
