@@ -83,7 +83,7 @@ object Alerts {
         ensureChannels(ctx)
         when (level) {
             Buzz.TAKEOVER -> takeover(ctx, buzz)
-            Buzz.LOUD -> notify(ctx, buzz, CH_LOUD).also { AlertPlayer.play(ctx, 10_000) }
+            Buzz.LOUD -> loud(ctx, buzz)
             else -> notify(ctx, buzz, CH_GENTLE).also { vibrateOnce(ctx) }
         }
     }
@@ -157,6 +157,33 @@ object Alerts {
         // Android only lets this jump in front of games/videos when "Display over other apps"
         // is allowed (or this app is open). Otherwise the full-screen intent above takes over.
         try { ctx.startActivity(i) } catch (_: Exception) {}
+    }
+
+    /** Alarm for 10 seconds plus a pop-up box with a "Got it" button that stops it. */
+    private fun loud(ctx: Context, buzz: Buzz) {
+        val popup = Intent(ctx, PopupActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra("mid", buzz.id)
+            .putExtra("from", title(buzz))
+            .putExtra("text", buzz.text)
+            .putExtra("notifId", notifId(buzz))
+        val popupPi = PendingIntent.getActivity(ctx, notifId(buzz), popup,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val ack = ackIntent(ctx, buzz)
+        val n = Notification.Builder(ctx, CH_LOUD)
+            .setSmallIcon(R.drawable.ic_bell)
+            .setContentTitle(title(buzz))
+            .setContentText(buzz.text)
+            .setStyle(Notification.BigTextStyle().bigText(buzz.text))
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setContentIntent(popupPi)
+            .setFullScreenIntent(popupPi, true) // shows the pop-up over the lock screen
+            .addAction(Notification.Action.Builder(null, "Got it", ack).build())
+            .setDeleteIntent(stopSoundIntent(ctx))
+            .build()
+        ctx.getSystemService(NotificationManager::class.java)!!.notify(notifId(buzz), n)
+        AlertPlayer.play(ctx, 10_000)
+        try { ctx.startActivity(popup) } catch (_: Exception) {}
     }
 
     fun sendAck(ctx: Context, mid: String) {
@@ -257,6 +284,7 @@ class AckReceiver : BroadcastReceiver() {
         if (intent.getBooleanExtra("stopOnly", false)) return
         val mid = intent.getStringExtra("mid") ?: return
         ctx.getSystemService(NotificationManager::class.java)!!.cancel(intent.getIntExtra("notifId", 0))
+        PopupActivity.closeIfShowing(mid)
         if (!mid.startsWith("test-")) Alerts.sendAck(ctx, mid)
     }
 }

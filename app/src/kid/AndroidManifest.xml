@@ -33,6 +33,16 @@
             android:screenOrientation="portrait"
             android:theme="@style/AlertTheme" />
 
+        <activity
+            android:name=".PopupActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.familybuzz.popup"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/PopupTheme" />
+
         <service
             android:name=".ListenerService"
             android:exported="false"
