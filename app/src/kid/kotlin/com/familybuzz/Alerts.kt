@@ -23,12 +23,14 @@ import java.util.Date
 
 object Alerts {
     const val CH_SERVICE = "listener"
-    const val CH_GENTLE = "gentle"
+    const val CH_GENTLE = "gentle_popup" // new id: Android won't raise an existing channel's importance
     const val CH_LOUD = "loud"
     const val CH_TAKEOVER = "takeover"
 
     /** Messages older than this (e.g. phone was off) arrive as gentle notifications instead. */
     private const val STALE_MS = 15 * 60_000L
+
+    private val GENTLE_BUZZ = longArrayOf(0, 300, 150, 300)
 
     fun kidName(ctx: Context) = ctx.store().getString("kidName", "") ?: ""
 
@@ -44,8 +46,14 @@ object Alerts {
                 description = "Keeps the app listening for messages from parents"
                 setShowBadge(false)
             })
+        nm.deleteNotificationChannel("gentle") // old quiet channel from the first version
         nm.createNotificationChannel(
-            NotificationChannel(CH_GENTLE, "Gentle messages", NotificationManager.IMPORTANCE_DEFAULT))
+            NotificationChannel(CH_GENTLE, "Gentle messages", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Pops up on screen with a short vibration"
+                enableVibration(true)
+                vibrationPattern = GENTLE_BUZZ
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
         nm.createNotificationChannel(
             NotificationChannel(CH_LOUD, "Loud messages", NotificationManager.IMPORTANCE_HIGH).apply {
                 setSound(null, null) // the app plays its own alarm sound
@@ -76,8 +84,17 @@ object Alerts {
         when (level) {
             Buzz.TAKEOVER -> takeover(ctx, buzz)
             Buzz.LOUD -> notify(ctx, buzz, CH_LOUD).also { AlertPlayer.play(ctx, 10_000) }
-            else -> notify(ctx, buzz, CH_GENTLE)
+            else -> notify(ctx, buzz, CH_GENTLE).also { vibrateOnce(ctx) }
         }
+    }
+
+    /** Short double buzz, even if the phone's notification vibration is turned off. */
+    private fun vibrateOnce(ctx: Context) {
+        try {
+            @Suppress("DEPRECATION")
+            val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            v.vibrate(VibrationEffect.createWaveform(GENTLE_BUZZ, -1))
+        } catch (_: Exception) {}
     }
 
     private fun notifId(buzz: Buzz) = buzz.id.hashCode()
